@@ -7,6 +7,7 @@ Supports both multiple-choice (inline buttons) and open-ended (text input) quest
 Answers and timestamps are saved to an Excel file.
 """
 
+import asyncio
 import html
 import json
 import logging
@@ -508,7 +509,7 @@ async def handle_text_answer(
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
+async def main() -> None:
     load_questions()
 
     if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
@@ -535,8 +536,19 @@ def main() -> None:
     )
 
     logger.info("Bot started. Admin IDs: %s", ADMIN_IDS)
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    async with app:
+        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        await app.start()
+        logger.info("Bot is running. Press Ctrl+C to stop.")
+        try:
+            await asyncio.Event().wait()
+        except (KeyboardInterrupt, SystemExit):
+            pass
+        finally:
+            await app.updater.stop()
+            await app.stop()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
