@@ -71,6 +71,9 @@ answered_users: dict[int, set[int]] = {}
 # user_id -> global_idx
 pending_open: dict[int, int] = {}
 
+# Track the last sent question so we can detect skips
+last_sent_gidx: int | None = None
+
 OPTION_LABELS = ["A", "B", "C", "D", "E", "F"]
 
 
@@ -207,14 +210,59 @@ def build_question_message(q: dict) -> tuple[str, InlineKeyboardMarkup | None]:
 # ---------------------------------------------------------------------------
 
 
+# Questions for which skips have already been recorded
+_skips_recorded: set[int] = set()
+
+
+def record_skips() -> int:
+    """Record skip entries for participants who didn't answer the last question.
+
+    Safe to call multiple times — records skips only once per question.
+    Returns the number of skipped participants.
+    """
+    if last_sent_gidx is None or last_sent_gidx in _skips_recorded:
+        return 0
+
+    _skips_recorded.add(last_sent_gidx)
+
+    prev_q = all_questions[last_sent_gidx]
+    already_answered = answered_users.get(last_sent_gidx, set())
+    skipped = 0
+
+    for uid, info in participants.items():
+        if uid not in already_answered:
+            answers.append(
+                {
+                    "user_id": uid,
+                    "user_name": info["name"],
+                    "username": info["username"],
+                    "block_name": prev_q["block_name"],
+                    "question_number": prev_q["number"],
+                    "question_text": prev_q["text"],
+                    "answer_text": "⏭ пропущено",
+                    "sent_at": question_sent_times.get(last_sent_gidx, ""),
+                    "answered_at": "",
+                }
+            )
+            skipped += 1
+
+    return skipped
+
+
 async def send_question_to_all(
     q: dict, context: ContextTypes.DEFAULT_TYPE
 ) -> int:
     """Send a question to every registered participant. Returns count sent."""
+    global last_sent_gidx
+
+    # Record skips for the previous question before sending a new one
+    record_skips()
+
     gidx = q["global_idx"]
     sent_time = now_utc()
     question_sent_times[gidx] = sent_time
     answered_users[gidx] = set()
+    last_sent_gidx = gidx
 
     # For open questions, set pending state for all participants
     if q["type"] == "open":
@@ -395,7 +443,7 @@ async def cmd_participants(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Reset the quiz: clear answers and rewind the question pointer (admin only)."""
-    global next_question_idx
+    global next_question_idx, last_sent_gidx
 
     if not is_admin(update.effective_user.id):
         return
@@ -405,7 +453,9 @@ async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     question_sent_times.clear()
     answered_users.clear()
     pending_open.clear()
+    _skips_recorded.clear()
     next_question_idx = 0
+    last_sent_gidx = None
 
     await update.message.reply_text(
         f"🦉 *щёлк* Память стёрта. Как будто ничего не было.\n\n"
@@ -421,6 +471,9 @@ async def cmd_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not is_admin(update.effective_user.id):
         await update.message.reply_text("🦉 Это не для тебя. Отойди от моего гнезда.")
         return
+
+    # Record skips for the last sent question before exporting
+    record_skips()
 
     if not answers:
         await update.message.reply_text("🦉 Пока пусто. Никто ещё не ответил. Может, они меня боятся?")
