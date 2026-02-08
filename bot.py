@@ -178,7 +178,7 @@ def build_question_message(q: dict) -> tuple[str, InlineKeyboardMarkup | None]:
     text = html.escape(q["text"])
 
     lines = [
-        f"<b>{block}</b>",
+        f"🦉 <b>{block}</b>",
         f"Вопрос {number}:\n",
         text,
     ]
@@ -197,7 +197,7 @@ def build_question_message(q: dict) -> tuple[str, InlineKeyboardMarkup | None]:
             )
         keyboard = InlineKeyboardMarkup([buttons])
     else:
-        lines.append("\n✏️ Напишите ваш ответ текстом.")
+        lines.append("\n🦉 Жду твой ответ текстом. Не заставляй меня ждать.")
 
     return "\n".join(lines), keyboard
 
@@ -256,21 +256,26 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             for i, b in enumerate(blocks)
         )
         await update.message.reply_text(
-            f"Привет, админ! Загружено {len(all_questions)} вопросов.\n\n"
+            f"🦉 Ух-ух! Рада тебя видеть, хозяин. "
+            f"Я загрузила {len(all_questions)} вопросов и готова терроризировать участников.\n\n"
             f"Блоки:\n{block_list}\n\n"
             "Команды:\n"
-            "/send_next_question — отправить следующий вопрос\n"
+            "/send_next_question — выпустить следующий вопрос на волю\n"
             "/send_question <блок> <вопрос> — отправить конкретный вопрос\n"
-            "/results — скачать Excel с результатами\n"
-            "/participants — список участников\n"
-            "/reset — начать викторину сначала"
+            "/results — скачать Excel с уликами\n"
+            "/participants — посмотреть на жертв\n"
+            "/reset — стереть всем память и начать сначала"
         )
         return
 
     ensure_participant(user)
     await update.message.reply_text(
-        f"Добро пожаловать в викторину, {user.first_name}!\n"
-        "Ожидайте — ведущий скоро начнёт отправлять вопросы."
+        f"🦉 О, {user.first_name}! Ты пришёл. Я уже начала волноваться.\n\n"
+        "Я — сова-викторина. Я буду присылать тебе вопросы, "
+        "а ты будешь на них отвечать. Быстро.\n\n"
+        "Не вздумай игнорировать меня. Я знаю, где ты живёшь. "
+        "Ну, в смысле... твой Telegram ID точно знаю. 👀\n\n"
+        "Жди вопросов!"
     )
     logger.info("Participant registered: %s (id=%d)", user.full_name, user.id)
 
@@ -286,13 +291,16 @@ async def cmd_send_next_question(
 
     if not participants:
         await update.message.reply_text(
-            "Нет зарегистрированных участников. "
-            "Участники должны сначала написать /start боту."
+            "🦉 Тут пусто... Ни одной жертвы. "
+            "Участники должны сначала написать /start, чтобы я могла за ними следить."
         )
         return
 
     if next_question_idx >= len(all_questions):
-        await update.message.reply_text("Все вопросы уже отправлены!")
+        await update.message.reply_text(
+            "🦉 Все вопросы уже отправлены! Я выжата как лимон. "
+            "Используй /reset если хочешь повторить этот кошмар."
+        )
         return
 
     q = all_questions[next_question_idx]
@@ -303,9 +311,9 @@ async def cmd_send_next_question(
     q_type = "с вариантами" if q["type"] == "choice" else "открытый"
 
     await update.message.reply_text(
-        f"✅ Отправлен: {q['block_name']}, вопрос {q['number']} ({q_type})\n"
-        f"Участников: {sent}\n"
-        f"Осталось вопросов: {remaining}"
+        f"🦉 Улетел! {q['block_name']}, вопрос {q['number']} ({q_type})\n"
+        f"Доставлено жертвам: {sent}\n"
+        f"Ещё в гнезде: {remaining} вопросов"
     )
 
 
@@ -318,23 +326,24 @@ async def cmd_send_question(
 
     if len(context.args) < 2:
         await update.message.reply_text(
-            "Использование: /send_question <номер_блока> <номер_вопроса>\n"
-            "Пример: /send_question 1 3\n"
-            "Пример: /send_question 7 11a"
+            "🦉 Эй, ты забыл указать что отправлять!\n\n"
+            "/send_question <блок> <вопрос>\n"
+            "Например: /send_question 1 3\n"
+            "Или: /send_question 7 11a"
         )
         return
 
     try:
         block_num = int(context.args[0])
     except ValueError:
-        await update.message.reply_text("Номер блока должен быть числом.")
+        await update.message.reply_text("🦉 Номер блока должен быть числом. Ты ведь это знаешь, правда?")
         return
 
     q_number = context.args[1]  # string to support "11a", "11b" etc.
 
     if block_num < 1 or block_num > len(blocks):
         await update.message.reply_text(
-            f"Блок {block_num} не найден. Всего блоков: {len(blocks)}."
+            f"🦉 Блок {block_num}? Такого не существует. У меня всего {len(blocks)}. Считать умеем?"
         )
         return
 
@@ -348,20 +357,20 @@ async def cmd_send_question(
     if not q:
         numbers = ", ".join(qq["number"] for qq in block["questions"])
         await update.message.reply_text(
-            f"Вопрос «{q_number}» не найден в блоке {block_num} ({block['name']}).\n"
-            f"Доступные номера: {numbers}"
+            f"🦉 Вопрос «{q_number}» в блоке {block_num} ({block['name']})? Нет такого.\n"
+            f"Вот что есть: {numbers}"
         )
         return
 
     if not participants:
-        await update.message.reply_text("Нет зарегистрированных участников.")
+        await update.message.reply_text("🦉 Некому отправлять. Ни одной живой души.")
         return
 
     sent = await send_question_to_all(q, context)
     q_type = "с вариантами" if q["type"] == "choice" else "открытый"
     await update.message.reply_text(
-        f"✅ Отправлен: {q['block_name']}, вопрос {q['number']} ({q_type})\n"
-        f"Участников: {sent}"
+        f"🦉 Улетел! {q['block_name']}, вопрос {q['number']} ({q_type})\n"
+        f"Доставлено жертвам: {sent}"
     )
 
 
@@ -371,16 +380,16 @@ async def cmd_participants(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     if not participants:
-        await update.message.reply_text("Пока нет зарегистрированных участников.")
+        await update.message.reply_text("🦉 Пока никто не пришёл. Грустно. Одиноко. Как всегда.")
         return
 
     lines = []
     for uid, info in participants.items():
         uname = f"@{info['username']}" if info["username"] else "—"
-        lines.append(f"• {info['name']} ({uname})")
+        lines.append(f"🐣 {info['name']} ({uname})")
 
     await update.message.reply_text(
-        f"Участники ({len(participants)}):\n" + "\n".join(lines)
+        f"🦉 Мои подопечные ({len(participants)}):\n\n" + "\n".join(lines)
     )
 
 
@@ -399,10 +408,10 @@ async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     next_question_idx = 0
 
     await update.message.reply_text(
-        f"Викторина сброшена.\n"
-        f"Удалено ответов: {old_answers}\n"
-        f"Указатель вопросов: 0/{len(all_questions)}\n"
-        f"Участники ({len(participants)}) сохранены."
+        f"🦉 *щёлк* Память стёрта. Как будто ничего не было.\n\n"
+        f"Уничтожено ответов: {old_answers}\n"
+        f"Вопросов снова в гнезде: {len(all_questions)}\n"
+        f"Участники ({len(participants)}) — никуда не денутся."
     )
     logger.info("Quiz reset by admin. %d answers cleared.", old_answers)
 
@@ -410,24 +419,24 @@ async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send the Excel results file to the admin."""
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("Эта команда доступна только администратору.")
+        await update.message.reply_text("🦉 Это не для тебя. Отойди от моего гнезда.")
         return
 
     if not answers:
-        await update.message.reply_text("Пока нет собранных ответов.")
+        await update.message.reply_text("🦉 Пока пусто. Никто ещё не ответил. Может, они меня боятся?")
         return
 
     save_to_excel()
     path = Path(EXCEL_FILE)
     if not path.exists():
-        await update.message.reply_text("Файл результатов не найден.")
+        await update.message.reply_text("🦉 Файл пропал... Кто-то украл мои улики!")
         return
 
     with open(path, "rb") as f:
         await update.message.reply_document(
             document=f,
             filename=EXCEL_FILE,
-            caption=f"Результаты викторины ({len(answers)} ответов)",
+            caption=f"🦉 Досье на участников. {len(answers)} ответов. Я всё записала.",
         )
 
 
@@ -459,7 +468,7 @@ async def handle_choice_answer(
 
     # Prevent double answers
     if user.id in answered_users.get(gidx, set()):
-        await query.message.reply_text("Вы уже ответили на этот вопрос.")
+        await query.message.reply_text("🦉 Э нет, один ответ — один шанс. Я же не благотворительность.")
         return
 
     answered_users.setdefault(gidx, set()).add(user.id)
@@ -487,7 +496,7 @@ async def handle_choice_answer(
 
     # Remove keyboard and confirm
     await query.edit_message_reply_markup(reply_markup=None)
-    await query.message.reply_text(f"Ответ принят: {answer_text}")
+    await query.message.reply_text(f"🦉 Записала: {answer_text}\nНадеюсь, ты уверен. Назад пути нет.")
 
     logger.info(
         "Choice answer from %s (id=%d): Q[%d] -> %s",
@@ -515,7 +524,7 @@ async def handle_text_answer(
 
     # Prevent double answers
     if user.id in answered_users.get(gidx, set()):
-        await update.message.reply_text("Вы уже ответили на этот вопрос.")
+        await update.message.reply_text("🦉 Ты уже отвечал. Я помню ВСЁ.")
         return
 
     answered_users.setdefault(gidx, set()).add(user.id)
@@ -540,7 +549,7 @@ async def handle_text_answer(
         }
     )
 
-    await update.message.reply_text("✅ Ответ принят!")
+    await update.message.reply_text("🦉 Ответ принят! Хороший человек. Пока что.")
 
     logger.info(
         "Text answer from %s (id=%d): Q[%d] -> %s",
