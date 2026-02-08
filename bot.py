@@ -258,7 +258,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "Команды:\n"
             "/send_next_question — отправить следующий вопрос\n"
             "/send_question <блок> <вопрос> — отправить конкретный вопрос\n"
-            "/results — скачать Excel с результатами"
+            "/results — скачать Excel с результатами\n"
+            "/participants — список участников\n"
+            "/reset — начать викторину сначала"
         )
         return
 
@@ -358,6 +360,48 @@ async def cmd_send_question(
         f"✅ Отправлен: {q['block_name']}, вопрос {q['number']} ({q_type})\n"
         f"Участников: {sent}"
     )
+
+
+async def cmd_participants(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the list of registered participants (admin only)."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    if not participants:
+        await update.message.reply_text("Пока нет зарегистрированных участников.")
+        return
+
+    lines = []
+    for uid, info in participants.items():
+        uname = f"@{info['username']}" if info["username"] else "—"
+        lines.append(f"• {info['name']} ({uname})")
+
+    await update.message.reply_text(
+        f"Участники ({len(participants)}):\n" + "\n".join(lines)
+    )
+
+
+async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Reset the quiz: clear answers and rewind the question pointer (admin only)."""
+    global next_question_idx
+
+    if not is_admin(update.effective_user.id):
+        return
+
+    old_answers = len(answers)
+    answers.clear()
+    question_sent_times.clear()
+    answered_users.clear()
+    pending_open.clear()
+    next_question_idx = 0
+
+    await update.message.reply_text(
+        f"Викторина сброшена.\n"
+        f"Удалено ответов: {old_answers}\n"
+        f"Указатель вопросов: 0/{len(all_questions)}\n"
+        f"Участники ({len(participants)}) сохранены."
+    )
+    logger.info("Quiz reset by admin. %d answers cleared.", old_answers)
 
 
 async def cmd_results(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -530,6 +574,8 @@ async def main() -> None:
     app.add_handler(CommandHandler("send_next_question", cmd_send_next_question))
     app.add_handler(CommandHandler("send_question", cmd_send_question))
     app.add_handler(CommandHandler("results", cmd_results))
+    app.add_handler(CommandHandler("participants", cmd_participants))
+    app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(CallbackQueryHandler(handle_choice_answer, pattern=r"^a_"))
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_answer)
