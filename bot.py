@@ -223,8 +223,9 @@ async def send_question_to_all(
 
     text, keyboard = build_question_message(q)
 
-    sent = 0
-    for uid in participants:
+    # Send to all participants concurrently so everyone gets the question
+    # at the same time (important for fair timing in a live quiz).
+    async def _send(uid: int) -> bool:
         try:
             await context.bot.send_message(
                 chat_id=uid,
@@ -232,11 +233,13 @@ async def send_question_to_all(
                 reply_markup=keyboard,
                 parse_mode="HTML",
             )
-            sent += 1
+            return True
         except Exception as e:
             logger.warning("Failed to send to %d: %s", uid, e)
+            return False
 
-    return sent
+    results = await asyncio.gather(*[_send(uid) for uid in participants])
+    return sum(results)
 
 
 # ---------------------------------------------------------------------------
